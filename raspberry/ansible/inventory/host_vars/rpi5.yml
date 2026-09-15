@@ -1,0 +1,20 @@
+---
+# =========================================================================
+#  CONNECTION DETAILS  ->  FILL IN
+# =========================================================================
+# Raspberry Pi IP or hostname (LAN). Once Tailscale is up you may also use
+# the tailnet name, e.g. rpi5-edge.
+ansible_host: 192.168.1.50
+# SSH user with passwordless sudo (or run with --ask-become-pass).
+ansible_user: pi
+ansible_port: 22
+# ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+
+# =========================================================================
+#  IDENTITY
+# =========================================================================
+# Sets the OS hostname, which k3s uses as the node name. Must be unique
+# within the cluster (and different from the control plane's hostname).
+rpi_hostname: rpi5
+# Name this node will get inside the tailnet.
+tailscale_hostname: rpi5-edge

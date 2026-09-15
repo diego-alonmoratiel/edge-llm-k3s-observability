@@ -1,0 +1,74 @@
+# llama-server runs the image built on the worker and imported into containerd,
+# so imagePullPolicy is Never. The nodeSelector pins the pod to the ARM64 node
+# (the PC control plane is amd64 and has neither the image nor the model).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-server
+  namespace: llm
+  labels:
+    app.kubernetes.io/name: llama-server
+    app.kubernetes.io/part-of: edge-llm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llama-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: llama-server
+        app.kubernetes.io/part-of: edge-llm
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+        - name: llama-server
+          image: llama-server:local
+          imagePullPolicy: Never
+          args:
+            - --model
+            - /models/qwen2.5-1.5b-instruct-q4_k_m.gguf
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            - --ctx-size
+            - "4096"
+            - --threads
+            - "4"
+            - --metrics
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2800Mi
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: llama-models

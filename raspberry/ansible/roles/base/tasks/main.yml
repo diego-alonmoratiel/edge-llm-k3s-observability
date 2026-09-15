@@ -1,0 +1,64 @@
+---
+- name: Show the detected distribution
+  ansible.builtin.debug:
+    msg: "{{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_architecture }})"
+
+- name: Update the apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Set the timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Set the hostname (used as the k3s node name)
+  ansible.builtin.hostname:
+    name: "{{ rpi_hostname | default(inventory_hostname) }}"
+
+# --- cgroups (required by k3s on Raspberry Pi OS) -------------------------
+- name: Read the current cmdline.txt
+  ansible.builtin.slurp:
+    src: "{{ rpi_boot_dir }}/cmdline.txt"
+  register: _cmdline_file
+
+- name: Compute the missing cgroup options
+  ansible.builtin.set_fact:
+    _cgroup_missing: >-
+      {{
+        rpi_cgroup_options.split(' ')
+        | difference((_cmdline_file.content | b64decode).split(' '))
+      }}
+
+- name: Enable cgroups in cmdline.txt
+  ansible.builtin.copy:
+    content: "{{ (_cmdline_file.content | b64decode | trim) }} {{ _cgroup_missing | join(' ') }}\n"
+    dest: "{{ rpi_boot_dir }}/cmdline.txt"
+    owner: root
+    group: root
+    mode: "0755"
+    backup: true
+  when: _cgroup_missing | length > 0
+  notify: Reboot to apply the cgroups required by k3s
+
+# --- Swap (useful on a 4 GB Pi) -------------------------------------------
+- name: Check the dphys-swapfile configuration
+  ansible.builtin.stat:
+    path: /etc/dphys-swapfile
+  register: _swap_conf
+
+- name: Set the swap size
+  ansible.builtin.lineinfile:
+    path: /etc/dphys-swapfile
+    regexp: '^#?\s*CONF_SWAPSIZE='
+    line: "CONF_SWAPSIZE={{ rpi_swap_size_mb }}"
+    state: present
+  when:
+    - rpi_swap_size_mb | int > 0
+    - _swap_conf.stat.exists
+  notify: Restart the swap service

@@ -1,0 +1,39 @@
+---
+- name: Create the build directory
+  ansible.builtin.file:
+    path: "{{ llm_build_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy the Dockerfile (build context)
+  ansible.builtin.copy:
+    src: Dockerfile
+    dest: "{{ llm_build_dir }}/Dockerfile"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Build the llama-server image natively for this CPU
+  community.docker.docker_image:
+    name: "{{ llm_image_name }}"
+    tag: "{{ llm_image_tag }}"
+    source: build
+    build:
+      path: "{{ llm_build_dir }}"
+      args:
+        LLAMA_CPP_REF: "{{ llm_llama_cpp_ref }}"
+    force_source: "{{ llm_rebuild }}"
+    state: present
+
+- name: List the images already present in k3s containerd
+  ansible.builtin.command: k3s ctr images ls -q
+  register: _ctr_images
+  changed_when: false
+
+- name: Import the image into the k3s containerd store
+  ansible.builtin.shell: |
+    set -o pipefail
+    docker save {{ llm_image_name }}:{{ llm_image_tag }} | k3s ctr images import -
+  when: (llm_image_name ~ ':' ~ llm_image_tag) not in _ctr_images.stdout

@@ -1,0 +1,55 @@
+---
+# Installs Tailscale on both the control plane and the worker. The auth key is
+# loaded from inventory/group_vars/all/vault.yml (encrypted). If it is empty,
+# the login is left for a later manual `tailscale up`.
+- name: Check whether Tailscale is installed
+  ansible.builtin.stat:
+    path: /usr/bin/tailscale
+  register: _tailscale_bin
+
+- name: Download the Tailscale installer
+  ansible.builtin.get_url:
+    url: "https://tailscale.com/install.sh"
+    dest: /tmp/tailscale-install.sh
+    mode: "0755"
+  when: not _tailscale_bin.stat.exists
+
+- name: Install Tailscale
+  ansible.builtin.command:
+    cmd: /tmp/tailscale-install.sh
+    creates: /usr/bin/tailscale
+  when: not _tailscale_bin.stat.exists
+
+- name: Ensure the tailscaled service is running
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    state: started
+    enabled: true
+
+- name: Query the current Tailscale status
+  ansible.builtin.command:
+    cmd: tailscale status --json
+  register: _tailscale_status
+  changed_when: false
+  failed_when: false
+
+- name: Log in to the tailnet with the auth key
+  ansible.builtin.command:
+    cmd: >-
+      tailscale up
+      --authkey={{ tailscale_authkey }}
+      --hostname={{ tailscale_hostname | default(inventory_hostname) }}
+      {{ '--ssh' if tailscale_ssh | bool else '' }}
+      {{ tailscale_extra_args }}
+  when:
+    - tailscale_authkey | length > 0
+    - (_tailscale_status.stdout | default('{}', true) | from_json).BackendState | default('NeedsLogin') != 'Running'
+  no_log: true
+
+- name: Warn that the login is still pending
+  ansible.builtin.debug:
+    msg: >-
+      Tailscale is installed but no auth key is configured.
+      Run 'make tailscale-up' (or 'sudo tailscale up --ssh' on the node)
+      once you have the key.
+  when: tailscale_authkey | length == 0

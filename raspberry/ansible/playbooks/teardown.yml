@@ -1,0 +1,72 @@
+---
+# Removes the workloads, deletes the worker node from the cluster and cleans the
+# worker (k3s agent, Docker, model). The control plane's k3s server is left intact.
+- name: Tear down the edge stack
+  hosts: control_plane:raspberry
+  gather_facts: false
+  vars_prompt:
+    - name: confirm
+      prompt: "This removes the workloads, the worker agent and Docker. Type 'yes' to continue"
+      private: false
+      default: "no"
+  vars:
+    manifests_dir: "{{ playbook_dir }}/../manifests"
+    worker_node: "{{ hostvars['rpi5'].rpi_hostname | default('rpi5') }}"
+  tasks:
+    - name: Abort when not confirmed
+      ansible.builtin.fail:
+        msg: "Operation cancelled."
+      when: confirm != "yes"
+
+    - name: Delete the workloads
+      ansible.builtin.command:
+        cmd: k3s kubectl delete -f {{ manifests_dir }} --ignore-not-found=true
+      when: "'control_plane' in group_names"
+      failed_when: false
+      changed_when: false
+
+    - name: Delete the worker node from the cluster
+      ansible.builtin.command:
+        cmd: k3s kubectl delete node {{ worker_node }} --ignore-not-found=true
+      when: "'control_plane' in group_names"
+      failed_when: false
+      changed_when: false
+
+    - name: Uninstall the k3s agent
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s-agent-uninstall.sh
+        removes: /usr/local/bin/k3s-agent-uninstall.sh
+      when: "'raspberry' in group_names"
+
+    - name: Purge Docker
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: absent
+        purge: true
+      when: "'raspberry' in group_names"
+      failed_when: false
+
+    - name: Remove the Docker repository and key
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/keyrings/docker.asc
+      when: "'raspberry' in group_names"
+
+    - name: Remove the model and build directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ llm_model_dir }}"
+        - "{{ llm_build_dir }}"
+      when: "'raspberry' in group_names"
+
+    - name: Log Tailscale out
+      ansible.builtin.command:
+        cmd: tailscale down
+      when: "'raspberry' in group_names"
+      failed_when: false
+      changed_when: false

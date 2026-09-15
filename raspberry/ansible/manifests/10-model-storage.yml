@@ -1,0 +1,35 @@
+# Model storage. The GGUF file is downloaded by Ansible to the host path below
+# (must match llm_model_dir in group_vars/raspberry). hostPath keeps a single
+# node simple; on multi-node clusters you would use a local-path provisioner.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: llama-models-pv
+  labels:
+    app.kubernetes.io/part-of: edge-llm
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: /opt/llama/models
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama-models
+  namespace: llm
+  labels:
+    app.kubernetes.io/part-of: edge-llm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: llama-models-pv
+  resources:
+    requests:
+      storage: 5Gi
