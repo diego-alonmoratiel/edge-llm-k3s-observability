@@ -1,0 +1,22 @@
+---
+# =========================================================================
+#  Inventario: las dos máquinas que forman el cluster.
+#    pc   -> control plane (k3s server ya instalado, en WSL2)
+#    rpi5 -> worker (la Raspberry Pi, se une como "agent")
+#  Edita ansible_host / ansible_user con los datos de TU Raspberry.
+# =========================================================================
+all:
+  children:
+    control_plane:
+      hosts:
+        pc:
+          # El control plane corre en esta misma máquina (WSL2),
+          # así que Ansible trabaja en local (no por SSH).
+          ansible_connection: local
+
+    raspberry:
+      hosts:
+        rpi5:
+          ansible_host: 192.168.1.50   # <-- EDITA: IP de la Raspberry
+          ansible_user: pi             # <-- EDITA: usuario SSH
+          # ansible_ssh_private_key_file: ~/.ssh/id_ed25519

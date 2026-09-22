@@ -1,22 +1,21 @@
-# node-exporter (phase 2 hook): the PC-side Prometheus will scrape
-# http://<node-ip>:9100/metrics. hostNetwork makes the port available on the host.
+# node-exporter: expone métricas de cada nodo en el puerto 9100.
+# Es el "gancho" para la fase 2 (Prometheus/Grafana en el PC).
+# hostNetwork: el puerto queda accesible en el host, no solo dentro del cluster.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: node-exporter
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: node-exporter
-    app.kubernetes.io/part-of: edge-llm
+    app: node-exporter
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: node-exporter
+      app: node-exporter
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: node-exporter
-        app.kubernetes.io/part-of: edge-llm
+        app: node-exporter
     spec:
       hostNetwork: true
       hostPID: true
@@ -29,17 +28,9 @@ spec:
             - --path.procfs=/host/proc
             - --path.sysfs=/host/sys
             - --path.rootfs=/host/root
-            - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/kubelet/.+)($|/)
           ports:
             - name: metrics
               containerPort: 9100
-              protocol: TCP
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
-              memory: 128Mi
           volumeMounts:
             - name: proc
               mountPath: /host/proc
@@ -49,7 +40,6 @@ spec:
               readOnly: true
             - name: root
               mountPath: /host/root
-              mountPropagation: HostToContainer
               readOnly: true
       volumes:
         - name: proc
@@ -68,14 +58,11 @@ metadata:
   name: node-exporter
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: node-exporter
-    app.kubernetes.io/part-of: edge-llm
+    app: node-exporter
 spec:
-  type: ClusterIP
   selector:
-    app.kubernetes.io/name: node-exporter
+    app: node-exporter
   ports:
     - name: metrics
       port: 9100
       targetPort: metrics
-      protocol: TCP

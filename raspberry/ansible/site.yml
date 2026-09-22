@@ -1,0 +1,240 @@
+---
+# =============================================================================
+#  site.yml — despliega todo el stack. Se ejecuta con:
+#
+#      ansible-playbook -i inventory.yml site.yml
+#
+#  Tiene 3 plays (bloques):
+#    1) Leer del control plane (el PC) los datos que la Pi necesita.
+#    2) Preparar la Raspberry Pi y unirla al cluster como worker.
+#    3) Aplicar los manifiestos de Kubernetes desde el PC.
+#
+#  Requisitos previos (ya hechos a mano, no los hace este playbook):
+#    - El PC tiene k3s server instalado y funcionando.
+#    - Tailscale está instalado y logueado en el PC y en la Pi.
+#    - Puedes entrar por SSH a la Pi (clave o contraseña).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# PLAY 1 — Control plane (pc)
+# -----------------------------------------------------------------------------
+- name: Read data from the k3s control plane
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: Get the Tailscale IP of the control plane
+      ansible.builtin.command: tailscale ip -4
+      register: ts_ip
+      changed_when: false
+
+    - name: Get the k3s server version
+      ansible.builtin.command: k3s --version
+      register: k3s_ver
+      changed_when: false
+
+    - name: Read the cluster join token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: token
+
+    # set_fact guarda estos valores como variables del host "pc".
+    # El siguiente play los lee con hostvars[...] (así se pasan datos entre plays).
+    - name: Expose these values to the next play
+      ansible.builtin.set_fact:
+        cp_tailscale_ip: "{{ ts_ip.stdout }}"
+        k3s_server_version: "{{ k3s_ver.stdout.split()[2] }}"
+        k3s_join_token: "{{ token.content | b64decode | trim }}"
+
+    # La Pi se une a https://<IP-tailscale>:6443. Esa IP tiene que estar en el
+    # certificado del API server (tls-san) o el agente rechaza la conexión.
+    # Leemos la config actual de k3s, añadimos la IP y la volvemos a escribir.
+    - name: Read the k3s server config (may not exist yet)
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/config.yaml
+      register: raw_cfg
+      failed_when: false
+
+    - name: Parse the current config
+      ansible.builtin.set_fact:
+        current_cfg: "{{ raw_cfg.content | default('') | b64decode | from_yaml | default({}, true) }}"
+
+    - name: Add the Tailscale IP to tls-san
+      ansible.builtin.set_fact:
+        new_cfg: >-
+          {{
+            current_cfg
+            | combine({'tls-san': (current_cfg['tls-san'] | default([])) + [ts_ip.stdout]})
+          }}
+
+    - name: Write the config only if the IP is missing
+      ansible.builtin.copy:
+        content: "{{ new_cfg | to_nice_yaml }}"
+        dest: /etc/rancher/k3s/config.yaml
+        mode: "0600"
+      register: wrote_cfg
+      when: ts_ip.stdout not in (current_cfg['tls-san'] | default([]))
+
+    - name: Restart k3s to load the new certificate
+      ansible.builtin.systemd_service:
+        name: k3s
+        state: restarted
+      when: wrote_cfg.changed | default(false)
+
+    - name: Wait for the API server to be ready again
+      ansible.builtin.command: k3s kubectl get --raw /readyz
+      register: readyz
+      until: readyz.rc == 0
+      retries: 30
+      delay: 5
+      changed_when: false
+      when: wrote_cfg.changed | default(false)
+
+# -----------------------------------------------------------------------------
+# PLAY 2 — Worker (rpi5)
+# -----------------------------------------------------------------------------
+- name: Prepare the Raspberry Pi worker
+  hosts: raspberry
+  become: true
+  vars:
+    # Nombre del host del control plane en el inventario (normalmente "pc").
+    cp: "{{ groups['control_plane'][0] }}"
+  handlers:
+    - name: Reboot the Pi
+      ansible.builtin.reboot:
+        msg: "Reiniciando para activar los cgroups de k3s"
+        reboot_timeout: 600
+    - name: Restart swap
+      ansible.builtin.systemd_service:
+        name: dphys-swapfile
+        state: restarted
+  tasks:
+    # --- Preparación básica del sistema --------------------------------
+    - name: Update the apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install basic packages
+      ansible.builtin.apt:
+        name: "{{ packages }}"
+        state: present
+
+    - name: Read the current timezone
+      ansible.builtin.command: timedatectl show --property=Timezone --value
+      register: tz
+      changed_when: false
+
+    - name: Set the timezone
+      ansible.builtin.command: "timedatectl set-timezone {{ timezone }}"
+      when: tz.stdout != timezone
+
+    - name: Set the hostname (k3s uses it as the node name)
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
+
+    # --- cgroups (obligatorios para k3s en Raspberry Pi OS) -------------
+    - name: Read cmdline.txt
+      ansible.builtin.slurp:
+        src: "{{ boot_dir }}/cmdline.txt"
+      register: cmdline
+
+    - name: Add the cgroup options if they are missing
+      ansible.builtin.copy:
+        content: "{{ (cmdline.content | b64decode | trim) }} cgroup_memory=1 cgroup_enable=memory\n"
+        dest: "{{ boot_dir }}/cmdline.txt"
+        mode: "0755"
+      when: "'cgroup_enable=memory' not in (cmdline.content | b64decode)"
+      notify: Reboot the Pi
+
+    # --- Swap (útil en una Pi de 4 GB) ----------------------------------
+    - name: Check if the swap config exists
+      ansible.builtin.stat:
+        path: /etc/dphys-swapfile
+      register: swapconf
+
+    - name: Set the swap size
+      ansible.builtin.lineinfile:
+        path: /etc/dphys-swapfile
+        regexp: '^#?\s*CONF_SWAPSIZE='
+        line: "CONF_SWAPSIZE={{ swap_mb }}"
+      when:
+        - swap_mb | int > 0
+        - swapconf.stat.exists
+      notify: Restart swap
+
+    # Los handlers (reboot/swap) corren al final del play. Aquí los forzamos
+    # AHORA para que los cgroups estén activos antes de instalar k3s.
+    - name: Apply base changes now (may reboot the Pi)
+      ansible.builtin.meta: flush_handlers
+
+    # --- k3s agent: unirse al cluster del PC ----------------------------
+    - name: Install k3s as an agent and join the cluster
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | \
+        K3S_URL=https://{{ hostvars[cp].cp_tailscale_ip }}:6443 \
+        K3S_TOKEN={{ hostvars[cp].k3s_join_token }} \
+        INSTALL_K3S_VERSION={{ hostvars[cp].k3s_server_version }} \
+        sh -
+      args:
+        creates: /usr/local/bin/k3s
+      no_log: true
+
+    - name: Ensure the k3s-agent service is running
+      ansible.builtin.systemd_service:
+        name: k3s-agent
+        state: started
+        enabled: true
+
+    # --- Descargar el modelo (los pesos GGUF) ---------------------------
+    - name: Create the model directory
+      ansible.builtin.file:
+        path: "{{ model_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download the LLM model
+      ansible.builtin.get_url:
+        url: "{{ model_url }}"
+        dest: "{{ model_dir }}/{{ model_file }}"
+        owner: root
+        group: root
+        mode: "0644"
+        timeout: 300
+      register: model_download
+      retries: 3
+      delay: 10
+      until: model_download is succeeded
+
+# -----------------------------------------------------------------------------
+# PLAY 3 — Aplicar los manifiestos de Kubernetes (desde el pc)
+# -----------------------------------------------------------------------------
+- name: Deploy the Kubernetes manifests
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: Apply the manifests
+      ansible.builtin.command: "k3s kubectl apply -f {{ playbook_dir }}/manifests"
+      register: apply
+      changed_when: "'created' in apply.stdout or 'configured' in apply.stdout"
+
+    - name: Wait for the worker node to be Ready
+      ansible.builtin.command: >-
+        k3s kubectl get node {{ groups['raspberry'][0] }}
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      until: node_ready.stdout == "True"
+      retries: 60
+      delay: 5
+      changed_when: false
+
+    - name: Wait for llama-server to be running
+      ansible.builtin.command: >-
+        k3s kubectl -n llm rollout status deployment/llama-server --timeout=600s
+      changed_when: false
+
+    - name: Show the endpoint
+      ansible.builtin.debug:
+        msg: >-
+          Listo. La API está en http://<IP-tailscale-de-la-Pi>:30080/v1

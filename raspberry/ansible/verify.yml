@@ -1,0 +1,43 @@
+---
+# =============================================================================
+#  verify.yml — comprueba que todo funciona.
+#      ansible-playbook -i inventory.yml verify.yml
+# =============================================================================
+
+- name: Check the cluster from the control plane
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: Show nodes and pods
+      ansible.builtin.command: k3s kubectl get nodes,pods -A -o wide
+      register: cluster
+      changed_when: false
+
+    - name: Print the cluster state
+      ansible.builtin.debug:
+        msg: "{{ cluster.stdout_lines }}"
+
+- name: Check the LLM API from the worker
+  hosts: raspberry
+  tasks:
+    - name: Wait for llama-server health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:30080/health"
+        status_code: 200
+        return_content: true
+      register: health
+      retries: 30
+      delay: 5
+      until: health.status == 200
+
+    - name: List the served models
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:30080/v1/models"
+        status_code: 200
+      register: models
+
+    - name: Print the result
+      ansible.builtin.debug:
+        msg:
+          - "health : {{ health.json }}"
+          - "models : {{ models.json.data | default([]) | map(attribute='id') | list }}"

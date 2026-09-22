@@ -1,36 +1,36 @@
-# llama-server runs the image built on the worker and imported into containerd,
-# so imagePullPolicy is Never. The nodeSelector pins the pod to the ARM64 node
-# (the PC control plane is amd64 and has neither the image nor the model).
+# llama-server usando la imagen OFICIAL (multi-arquitectura, incluye arm64).
+# k3s la descarga solo la primera vez que arranca el pod.
+# nodeSelector: el cluster mezcla amd64 (PC) y arm64 (Pi); esto obliga a que
+# el pod caiga en la Pi, que es donde está el modelo.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: llama-server
   namespace: llm
   labels:
-    app.kubernetes.io/name: llama-server
-    app.kubernetes.io/part-of: edge-llm
+    app: llama-server
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: llama-server
+      app: llama-server
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: llama-server
-        app.kubernetes.io/part-of: edge-llm
+        app: llama-server
     spec:
       nodeSelector:
         kubernetes.io/arch: arm64
       containers:
         - name: llama-server
-          image: llama-server:local
-          imagePullPolicy: Never
+          image: ghcr.io/ggml-org/llama.cpp:server
           args:
             - --model
-            - /models/qwen2.5-1.5b-instruct-q4_k_m.gguf
+            - /models/model.gguf
+            - --alias
+            - qwen2.5-1.5b
             - --host
             - 0.0.0.0
             - --port
@@ -43,7 +43,6 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-              protocol: TCP
           readinessProbe:
             httpGet:
               path: /health
@@ -57,7 +56,6 @@ spec:
               port: http
             initialDelaySeconds: 60
             periodSeconds: 30
-            failureThreshold: 5
           resources:
             requests:
               cpu: 100m
@@ -72,3 +70,21 @@ spec:
         - name: models
           persistentVolumeClaim:
             claimName: llama-models
+---
+# NodePort: expone la API en el puerto 30080 de la Pi.
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-server
+  namespace: llm
+  labels:
+    app: llama-server
+spec:
+  type: NodePort
+  selector:
+    app: llama-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30080

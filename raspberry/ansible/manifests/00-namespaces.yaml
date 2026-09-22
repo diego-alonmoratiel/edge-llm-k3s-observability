@@ -1,0 +1,10 @@
+# Namespaces: uno para el LLM y otro para monitorización (node-exporter).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring

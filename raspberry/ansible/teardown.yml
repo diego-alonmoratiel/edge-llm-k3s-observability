@@ -1,0 +1,42 @@
+---
+# =============================================================================
+#  teardown.yml — borra lo que creó site.yml (pide confirmación).
+#      ansible-playbook -i inventory.yml teardown.yml
+#  El control plane (k3s server) NO se toca.
+# =============================================================================
+
+- name: Remove the stack
+  hosts: all
+  become: true
+  vars_prompt:
+    - name: confirm
+      prompt: "Se borrarán los workloads y el agente k3s de la Pi. Escribe 'yes' para continuar"
+      private: false
+      default: "no"
+  tasks:
+    - name: Abort when not confirmed
+      ansible.builtin.fail:
+        msg: "Cancelado."
+      when: confirm != "yes"
+
+    - name: Delete the Kubernetes manifests
+      ansible.builtin.command: "k3s kubectl delete -f {{ playbook_dir }}/manifests --ignore-not-found=true"
+      when: "'control_plane' in group_names"
+      failed_when: false
+
+    - name: Remove the worker node from the cluster
+      ansible.builtin.command: "k3s kubectl delete node {{ groups['raspberry'][0] }} --ignore-not-found=true"
+      when: "'control_plane' in group_names"
+      failed_when: false
+
+    - name: Uninstall the k3s agent
+      ansible.builtin.command: /usr/local/bin/k3s-agent-uninstall.sh
+      args:
+        removes: /usr/local/bin/k3s-agent-uninstall.sh
+      when: "'raspberry' in group_names"
+
+    - name: Remove the downloaded model
+      ansible.builtin.file:
+        path: "{{ model_dir }}"
+        state: absent
+      when: "'raspberry' in group_names"

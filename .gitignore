@@ -1,11 +1,6 @@
 # Ansible
 *.retry
 .ansible/
-raspberry/ansible/tmp/
-
-# Secrets (never commit)
-raspberry/ansible/inventory/group_vars/all/vault.yml
-raspberry/ansible/vault/vault-password
 
 # Kubeconfig
 kubeconfig
