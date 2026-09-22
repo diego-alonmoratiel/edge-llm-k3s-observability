@@ -1,7 +1,3 @@
-# El modelo no va dentro de la imagen: Ansible lo descarga en la Pi
-# (group_vars/all.yml -> model_dir) y aquí lo exponemos con un volumen.
-# PV = el recurso real (una carpeta del host).
-# PVC = la "reserva" que el pod usa.
 apiVersion: v1
 kind: PersistentVolume
 metadata:

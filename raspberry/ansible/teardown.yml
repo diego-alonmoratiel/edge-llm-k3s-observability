@@ -1,22 +1,16 @@
 ---
-# =============================================================================
-#  teardown.yml — borra lo que creó site.yml (pide confirmación).
-#      ansible-playbook -i inventory.yml teardown.yml
-#  El control plane (k3s server) NO se toca.
-# =============================================================================
-
 - name: Remove the stack
   hosts: all
   become: true
   vars_prompt:
     - name: confirm
-      prompt: "Se borrarán los workloads y el agente k3s de la Pi. Escribe 'yes' para continuar"
+      prompt: "Type 'yes' to delete the workloads and uninstall the k3s agent on the Pi"
       private: false
       default: "no"
   tasks:
     - name: Abort when not confirmed
       ansible.builtin.fail:
-        msg: "Cancelado."
+        msg: "Cancelled."
       when: confirm != "yes"
 
     - name: Delete the Kubernetes manifests

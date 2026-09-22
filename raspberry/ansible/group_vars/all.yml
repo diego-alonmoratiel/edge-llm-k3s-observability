@@ -1,29 +1,15 @@
 ---
-# =========================================================================
-#  Todas las variables del proyecto, en un solo fichero.
-# =========================================================================
-
-# --- Raspberry Pi (worker) ------------------------------------------------
 timezone: "Europe/Madrid"
 
-# Paquetes que instalamos en la Pi.
 packages:
   - curl
   - ca-certificates
   - jq
   - htop
 
-# Dónde está cmdline.txt en Raspberry Pi OS Bookworm (para los cgroups).
 boot_dir: /boot/firmware
-# Swap en MB (ayuda en una Pi de 4 GB). 0 = no tocar.
 swap_mb: 2048
 
-# --- Modelo LLM (se descarga en la Pi) ------------------------------------
 model_dir: /opt/llama/models
-model_file: model.gguf     # nombre local; el manifiesto monta /models/model.gguf
+model_file: model.gguf
 model_url: "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
-
-# Nota: la imagen, el NodePort (30080), el contexto (4096) y los hilos (4)
-# están escritos en los ficheros de manifests/. Si cambias model_dir o
-# model_file aquí, actualízalos también en manifests/10-model-storage.yaml
-# y manifests/20-llama-server.yaml.

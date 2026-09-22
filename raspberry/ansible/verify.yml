@@ -1,9 +1,4 @@
 ---
-# =============================================================================
-#  verify.yml — comprueba que todo funciona.
-#      ansible-playbook -i inventory.yml verify.yml
-# =============================================================================
-
 - name: Check the cluster from the control plane
   hosts: control_plane
   become: true

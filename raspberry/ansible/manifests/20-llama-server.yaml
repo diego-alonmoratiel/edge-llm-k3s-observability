@@ -1,7 +1,3 @@
-# llama-server usando la imagen OFICIAL (multi-arquitectura, incluye arm64).
-# k3s la descarga solo la primera vez que arranca el pod.
-# nodeSelector: el cluster mezcla amd64 (PC) y arm64 (Pi); esto obliga a que
-# el pod caiga en la Pi, que es donde está el modelo.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,7 +67,6 @@ spec:
           persistentVolumeClaim:
             claimName: llama-models
 ---
-# NodePort: expone la API en el puerto 30080 de la Pi.
 apiVersion: v1
 kind: Service
 metadata:

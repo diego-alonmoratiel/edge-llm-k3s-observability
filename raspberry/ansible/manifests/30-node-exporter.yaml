@@ -1,6 +1,3 @@
-# node-exporter: expone métricas de cada nodo en el puerto 9100.
-# Es el "gancho" para la fase 2 (Prometheus/Grafana en el PC).
-# hostNetwork: el puerto queda accesible en el host, no solo dentro del cluster.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:

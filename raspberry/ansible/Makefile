@@ -1,18 +1,19 @@
-# Atajos. Ejecuta `make` (sin argumentos) para ver la ayuda.
 export ANSIBLE_HOST_KEY_CHECKING = False
 
 .DEFAULT_GOAL := help
-.PHONY: help install verify teardown
 
-help: ## Muestra esta ayuda
-	@grep -hE '^[a-z]+:.*?## ' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  %-10s %s\n", $$1, $$2}'
+help:
+	@echo "  make install   -> ansible-playbook -i inventory.yml site.yml"
+	@echo "  make verify    -> ansible-playbook -i inventory.yml verify.yml"
+	@echo "  make teardown  -> ansible-playbook -i inventory.yml teardown.yml"
 
-install: ## Despliega todo (instala y configura la Pi + aplica manifiestos)
+install:
 	ansible-playbook -i inventory.yml site.yml
 
-verify: ## Comprueba el cluster y la API del LLM
+verify:
 	ansible-playbook -i inventory.yml verify.yml
 
-teardown: ## Borra los workloads y desinstala el agente k3s de la Pi
+teardown:
 	ansible-playbook -i inventory.yml teardown.yml
+
+.PHONY: help install verify teardown
