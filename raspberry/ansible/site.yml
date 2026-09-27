@@ -79,6 +79,10 @@
         name: dphys-swapfile
         state: restarted
   tasks:
+    - name: Record the worker node name (k3s uses the hostname)
+      ansible.builtin.set_fact:
+        worker_node_name: "{{ ansible_facts['hostname'] }}"
+
     - name: Update the apt cache
       ansible.builtin.apt:
         update_cache: true
@@ -97,10 +101,6 @@
     - name: Set the timezone
       ansible.builtin.command: "timedatectl set-timezone {{ timezone }}"
       when: tz.stdout != timezone
-
-    - name: Set the hostname
-      ansible.builtin.hostname:
-        name: "{{ inventory_hostname }}"
 
     - name: Read cmdline.txt
       ansible.builtin.slurp:
@@ -182,7 +182,7 @@
 
     - name: Wait for the worker node to be Ready
       ansible.builtin.command: >-
-        k3s kubectl get node {{ groups['raspberry'][0] }}
+        k3s kubectl get node {{ hostvars[groups['raspberry'][0]].worker_node_name }}
         -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
       register: node_ready
       until: node_ready.stdout == "True"

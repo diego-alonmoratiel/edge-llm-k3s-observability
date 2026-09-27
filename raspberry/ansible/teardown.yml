@@ -19,7 +19,7 @@
       failed_when: false
 
     - name: Remove the worker node from the cluster
-      ansible.builtin.command: "k3s kubectl delete node {{ groups['raspberry'][0] }} --ignore-not-found=true"
+      ansible.builtin.command: "k3s kubectl delete node {{ hostvars[groups['raspberry'][0]].ansible_facts.hostname }} --ignore-not-found=true"
       when: "'control_plane' in group_names"
       failed_when: false
 

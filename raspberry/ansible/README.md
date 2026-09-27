@@ -16,6 +16,14 @@ OpenAI-compatible API, reachable over Tailscale.
    ssh-copy-id pi@192.168.1.50
    ```
 4. Edit `inventory.yml` with your Pi's IP and user.
+5. Sudo: the playbooks use `become: true`. The `pi` user on Raspberry Pi OS
+   normally has passwordless sudo; if it does not, run it once on the Pi:
+   ```bash
+   echo "pi ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/010_pi-nopasswd
+   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
+   ```
+   Never run the playbooks with `sudo`. If the local (`pc`) sudo asks for a
+   password, run them as `make install EXTRA="-K"`.
 
 ## Layout
 
