@@ -52,14 +52,19 @@ worker and join it to the cluster, then apply the manifests.
 
 ## API
 
-```bash
-curl http://rpi5-edge:30080/v1/models
+`llama-server` speaks the OpenAI API. The NodePort is reachable on any IP of the
+worker (Tailscale or LAN):
 
-curl http://rpi5-edge:30080/v1/chat/completions \
+```bash
+curl http://<pi-ip>:30080/v1/models
+
+curl http://<pi-ip>:30080/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"qwen2.5-1.5b",
        "messages":[{"role":"user","content":"Hello"}]}'
 ```
+
+The built-in web UI is served at `http://<pi-ip>:30080/`.
 
 ## Metrics
 
