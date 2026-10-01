@@ -57,6 +57,7 @@ metadata:
   labels:
     app: node-exporter
 spec:
+  clusterIP: None
   selector:
     app: node-exporter
   ports:

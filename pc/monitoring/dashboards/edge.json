@@ -6,7 +6,7 @@
       "type": "timeseries",
       "title": "CPU usage %",
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
       "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
       "targets": [
         {
@@ -21,7 +21,7 @@
       "type": "timeseries",
       "title": "Memory available",
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
       "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
       "targets": [
         {
@@ -34,9 +34,24 @@
     },
     {
       "type": "timeseries",
+      "title": "CPU temperature (°C)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "fieldConfig": {"defaults": {"unit": "celsius"}, "overrides": []},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "node_thermal_zone_temp{type=\"cpu-thermal\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
       "title": "Load average (1m)",
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
       "targets": [
         {
@@ -49,15 +64,31 @@
     },
     {
       "type": "stat",
+      "title": "CPU temp (current)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "area", "textMode": "auto"},
+      "fieldConfig": {"defaults": {"unit": "celsius"}, "overrides": []},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "node_thermal_zone_temp{type=\"cpu-thermal\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
       "title": "Targets up",
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
       "targets": [
         {
           "refId": "A",
           "datasource": {"type": "prometheus", "uid": "prometheus"},
           "expr": "up",
-          "legendFormat": "{{job}}"
+          "legendFormat": "{{instance}} ({{job}})"
         }
       ]
     },

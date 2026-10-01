@@ -239,6 +239,16 @@
       register: apply_namespace
       changed_when: "'created' in apply_namespace.stdout or 'configured' in apply_namespace.stdout"
 
+    - name: Check the node-exporter Service cluster IP
+      ansible.builtin.command: k3s kubectl -n monitoring get svc node-exporter -o jsonpath={.spec.clusterIP}
+      register: node_exporter_cluster_ip
+      changed_when: false
+      failed_when: false
+
+    - name: Recreate the node-exporter Service as headless (clusterIP is immutable)
+      ansible.builtin.command: k3s kubectl -n monitoring delete svc node-exporter
+      when: node_exporter_cluster_ip.stdout | default('') not in ['', 'None']
+
     - name: Generate the Grafana admin password if it does not exist
       ansible.builtin.copy:
         content: "admin-password={{ lookup('ansible.builtin.password', '/dev/null length=24') }}\n"
