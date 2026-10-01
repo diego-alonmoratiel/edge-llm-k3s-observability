@@ -1,5 +1,7 @@
 # Edge LLM on k3s + llama.cpp + Tailscale
 
+> Part of the [Edge LLM on k3s + Observability](../README.md) project.
+
 A two-node k3s cluster that serves a small LLM through the llama.cpp
 OpenAI-compatible API, reachable over Tailscale.
 

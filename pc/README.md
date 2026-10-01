@@ -1,5 +1,7 @@
 # pc — monitoring host
 
+> Part of the [Edge LLM on k3s + Observability](../README.md) project.
+
 Observability stack that runs on the PC (the k3s control-plane node). The
 workloads are pinned to this node, so they never consume the Raspberry Pi's
 memory.

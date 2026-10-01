@@ -1,5 +1,7 @@
 # raspberry — edge node (worker)
 
+> Part of the [Edge LLM on k3s + Observability](../README.md) project.
+
 Artifacts for the Raspberry Pi 5, which joins the k3s cluster as a worker and
 runs the LLM workload.
 
