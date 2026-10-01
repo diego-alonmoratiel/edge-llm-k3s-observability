@@ -273,6 +273,11 @@
       register: apply_monitoring
       changed_when: "'created' in apply_monitoring.stdout or 'configured' in apply_monitoring.stdout"
 
+    - name: Restart Prometheus to reload its configuration
+      ansible.builtin.command: k3s kubectl -n monitoring rollout restart deployment/prometheus
+      when: apply_monitoring.changed
+      changed_when: true
+
     - name: Wait for the worker node to be Ready
       ansible.builtin.command: >-
         k3s kubectl get node {{ hostvars[groups['raspberry'][0]].worker_node_name }}
