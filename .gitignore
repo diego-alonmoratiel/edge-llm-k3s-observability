@@ -7,4 +7,7 @@ kubeconfig
 *.kubeconfig
 
 # Personal study notes (kept out of the repo)
-raspberry/docs/ANNOTATED-FLOW.md
+docs/ANNOTATED-FLOW.md
+
+# Local secrets (never commit)
+pc/monitoring/grafana-admin.env

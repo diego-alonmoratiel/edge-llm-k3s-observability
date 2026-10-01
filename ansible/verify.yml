@@ -8,9 +8,14 @@
       register: cluster
       changed_when: false
 
+    - name: Show services
+      ansible.builtin.command: k3s kubectl get svc -A
+      register: services
+      changed_when: false
+
     - name: Print the cluster state
       ansible.builtin.debug:
-        msg: "{{ cluster.stdout_lines }}"
+        msg: "{{ cluster.stdout_lines + [''] + services.stdout_lines }}"
 
 - name: Check the LLM API from the worker
   hosts: raspberry

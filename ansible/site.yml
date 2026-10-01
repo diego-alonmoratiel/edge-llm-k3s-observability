@@ -34,23 +34,27 @@
       ansible.builtin.set_fact:
         current_cfg: "{{ raw_cfg.content | default('') | b64decode | from_yaml | default({}, true) }}"
 
-    - name: Add the Tailscale IP to tls-san
+    - name: Build the desired k3s config (tls-san + tailnet networking)
       ansible.builtin.set_fact:
-        new_cfg: >-
+        desired_cfg: >-
           {{
             current_cfg
-            | combine({'tls-san': (current_cfg['tls-san'] | default([])) + [ts_ip.stdout]})
+            | combine({
+                'tls-san': ((current_cfg['tls-san'] | default([])) + [ts_ip.stdout]) | unique,
+                'node-ip': ts_ip.stdout,
+                'flannel-iface': 'tailscale0'
+              })
           }}
 
-    - name: Write the config only if the IP is missing
+    - name: Write the config when it differs
       ansible.builtin.copy:
-        content: "{{ new_cfg | to_nice_yaml }}"
+        content: "{{ desired_cfg | to_nice_yaml }}"
         dest: /etc/rancher/k3s/config.yaml
         mode: "0600"
       register: wrote_cfg
-      when: ts_ip.stdout not in (current_cfg['tls-san'] | default([]))
+      when: desired_cfg != current_cfg
 
-    - name: Restart k3s to load the new certificate
+    - name: Restart k3s to apply the networking config
       ansible.builtin.systemd_service:
         name: k3s
         state: restarted
@@ -77,6 +81,10 @@
     - name: Restart swap
       ansible.builtin.systemd_service:
         name: dphys-swapfile
+        state: restarted
+    - name: Restart k3s-agent
+      ansible.builtin.systemd_service:
+        name: k3s-agent
         state: restarted
   tasks:
     - name: Record the worker node name (k3s uses the hostname)
@@ -133,6 +141,49 @@
     - name: Apply base changes now
       ansible.builtin.meta: flush_handlers
 
+    - name: Get the worker Tailscale IP
+      ansible.builtin.command: tailscale ip -4
+      register: worker_ts_ip
+      changed_when: false
+
+    - name: Ensure the k3s config directory exists
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Read the k3s agent config (may not exist)
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/config.yaml
+      register: raw_agent_cfg
+      failed_when: false
+
+    - name: Parse the current agent config
+      ansible.builtin.set_fact:
+        current_agent_cfg: "{{ raw_agent_cfg.content | default('') | b64decode | from_yaml | default({}, true) }}"
+
+    - name: Build the desired agent config (tailnet networking)
+      ansible.builtin.set_fact:
+        desired_agent_cfg: >-
+          {{
+            current_agent_cfg
+            | combine({
+                'node-ip': worker_ts_ip.stdout,
+                'flannel-iface': 'tailscale0'
+              })
+          }}
+
+    - name: Write the agent config when it differs
+      ansible.builtin.copy:
+        content: "{{ desired_agent_cfg | to_nice_yaml }}"
+        dest: /etc/rancher/k3s/config.yaml
+        mode: "0600"
+      register: wrote_agent_cfg
+      when: desired_agent_cfg != current_agent_cfg
+      notify: Restart k3s-agent
+
     - name: Install k3s as an agent and join the cluster
       ansible.builtin.shell: |
         curl -sfL https://get.k3s.io | \
@@ -174,11 +225,53 @@
 - name: Deploy the Kubernetes manifests
   hosts: control_plane
   become: true
+  vars:
+    edge_manifests: "{{ playbook_dir }}/../raspberry/manifests"
+    monitoring_dir: "{{ playbook_dir }}/../pc/monitoring"
   tasks:
-    - name: Apply the manifests
-      ansible.builtin.command: "k3s kubectl apply -f {{ playbook_dir }}/manifests"
+    - name: Apply the edge manifests
+      ansible.builtin.command: "k3s kubectl apply -f {{ edge_manifests }}"
       register: apply
       changed_when: "'created' in apply.stdout or 'configured' in apply.stdout"
+
+    - name: Apply the monitoring namespace
+      ansible.builtin.command: "k3s kubectl apply -f {{ monitoring_dir }}/00-namespace.yaml"
+      register: apply_namespace
+      changed_when: "'created' in apply_namespace.stdout or 'configured' in apply_namespace.stdout"
+
+    - name: Generate the Grafana admin password if it does not exist
+      ansible.builtin.copy:
+        content: "admin-password={{ lookup('ansible.builtin.password', '/dev/null length=24') }}\n"
+        dest: "{{ monitoring_dir }}/grafana-admin.env"
+        mode: "0600"
+        force: false
+      become: false
+
+    - name: Create or update the Grafana dashboard ConfigMap from the JSON file
+      ansible.builtin.shell: >-
+        k3s kubectl -n monitoring create configmap grafana-dashboard-edge
+        --from-file=edge.json={{ monitoring_dir }}/dashboards/edge.json
+        --dry-run=client -o yaml | k3s kubectl apply -f -
+      register: dashboard_configmap
+      changed_when: "'created' in dashboard_configmap.stdout or 'configured' in dashboard_configmap.stdout"
+
+    - name: Create or update the Grafana admin Secret from the env file
+      ansible.builtin.shell: >-
+        k3s kubectl -n monitoring create secret generic grafana-admin
+        --from-env-file={{ monitoring_dir }}/grafana-admin.env
+        --dry-run=client -o yaml | k3s kubectl apply -f -
+      register: grafana_secret
+      changed_when: "'created' in grafana_secret.stdout or 'configured' in grafana_secret.stdout"
+      no_log: true
+
+    - name: Apply the monitoring manifests
+      ansible.builtin.command: >-
+        k3s kubectl apply
+        -f {{ monitoring_dir }}/10-node-exporter.yaml
+        -f {{ monitoring_dir }}/50-prometheus.yaml
+        -f {{ monitoring_dir }}/60-grafana.yaml
+      register: apply_monitoring
+      changed_when: "'created' in apply_monitoring.stdout or 'configured' in apply_monitoring.stdout"
 
     - name: Wait for the worker node to be Ready
       ansible.builtin.command: >-

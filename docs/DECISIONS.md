@@ -50,6 +50,34 @@ certificate (`tls-san`), otherwise the agent's TLS verification fails.
 There is no external load balancer and Traefik is disabled to save RAM. A
 NodePort on the tailnet is the simplest way to expose one service securely.
 
-## Observability deferred (phase 2)
-Only the collection side (`node-exporter`) is deployed now. Prometheus and
-Grafana will run on the PC, scraping the tailnet.
+## Monitoring as plain manifests (not Helm)
+Prometheus and Grafana are deployed as plain manifests, pinned to the PC node,
+scraping through cluster-internal DNS. Helm's `kube-prometheus-stack` is the
+standard for large clusters, but here it would add an operator, CRDs and a
+duplicate node-exporter for only two scrape targets. Helm is the right tool for
+third-party, complex charts (e.g. `ingress-nginx`), not for two owned workloads.
+
+## Ephemeral storage for the monitoring stack
+Prometheus and Grafana use `emptyDir`. Metric history is lost on restart, but the
+dashboards and datasource are provisioned from ConfigMaps, so nothing needs
+persisting to demonstrate the setup. A PVC with the `local-path` storage class
+would be the upgrade path.
+
+## The dashboard and the secret are generated with kubectl, not embedded
+The Grafana dashboard is a standalone JSON file (`pc/monitoring/dashboards/`)
+turned into a ConfigMap with `kubectl create configmap --from-file`, and the
+admin password is a gitignored `.env` turned into a Secret with
+`kubectl create secret --from-env-file`. Both use the idempotent
+`--dry-run=client -o yaml | kubectl apply -f -` pattern. This keeps the JSON
+editable and the secret out of Git without adding kustomize or templating. For a
+GitOps setup the next step would be Sealed Secrets or SOPS.
+
+## k3s over Tailscale: node-ip and flannel-iface
+The control plane runs inside WSL2, whose default interface IP (`172.23.x`) is
+behind NAT and unreachable from the Raspberry Pi. Both nodes are configured with
+`node-ip` = their Tailscale IP and `flannel-iface: tailscale0`, so the API
+connection and flannel VXLAN (cross-node pod traffic) flow over the tailnet.
+Without this, a service on one node is unreachable from the other: for example,
+Prometheus (on the PC) could not scrape `llama-server` (on the Pi), because the
+response path Pi -> PC had no reachable node IP.
+

@@ -34,8 +34,10 @@ site.yml             installs and deploys everything
 verify.yml           checks the cluster and the LLM API
 teardown.yml         removes what site.yml created
 Makefile             make install / verify / teardown
-manifests/           Kubernetes YAML
 ```
+
+The edge manifests live in `../raspberry/manifests/` and the monitoring stack in
+`../pc/monitoring/`; `site.yml` applies both.
 
 See also `../docs/ARCHITECTURE.md` and `../docs/DECISIONS.md`.
 
@@ -66,7 +68,18 @@ curl http://<pi-ip>:30080/v1/chat/completions \
 
 The built-in web UI is served at `http://<pi-ip>:30080/`.
 
-## Metrics
+## Monitoring
 
-`node-exporter` is exposed on every node at `http://<node-ip>:9100/metrics`
-and llama-server at `http://<pi-ip>:30080/metrics` (phase 2 will scrape them).
+Prometheus + Grafana are deployed by the same `site.yml` run, from
+`../pc/monitoring/`. They run on the PC (control-plane) node and scrape through
+cluster-internal DNS.
+
+- Grafana: `http://localhost:30300` from the PC (or `http://<node-ip>:30300`),
+  login `admin` + the password in `../pc/monitoring/grafana-admin.env` (created
+  automatically if missing).
+- Prometheus: cluster-internal `prometheus.monitoring.svc:9090`.
+
+Raw metrics are also exposed at:
+
+- `node-exporter`: `http://<node-ip>:9100/metrics`
+- `llama-server`: `http://<pi-ip>:30080/metrics`

@@ -13,8 +13,13 @@
         msg: "Cancelled."
       when: confirm != "yes"
 
-    - name: Delete the Kubernetes manifests
-      ansible.builtin.command: "k3s kubectl delete -f {{ playbook_dir }}/manifests --ignore-not-found=true"
+    - name: Delete the edge manifests
+      ansible.builtin.command: "k3s kubectl delete -f {{ playbook_dir }}/../raspberry/manifests --ignore-not-found=true"
+      when: "'control_plane' in group_names"
+      failed_when: false
+
+    - name: Delete the monitoring stack
+      ansible.builtin.command: "k3s kubectl delete namespace monitoring --ignore-not-found=true"
       when: "'control_plane' in group_names"
       failed_when: false
 
