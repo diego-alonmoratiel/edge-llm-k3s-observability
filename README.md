@@ -24,6 +24,8 @@ A self-contained edge AI lab:
 - **Networking** — both nodes join a private **Tailscale** mesh; k3s itself is
   configured to use the tailnet (`node-ip` + `flannel-iface: tailscale0`), so
   cross-node pod traffic works even though the WSL control plane is behind NAT.
+  It also makes the LLM reachable **from anywhere on the tailnet — including your
+  phone** (install Tailscale and open the Pi's MagicDNS name).
 - **Infrastructure as Code** — a single idempotent Ansible playbook provisions the
   Pi, joins it to the cluster and applies the manifests.
 
@@ -134,6 +136,13 @@ curl http://<pi-ip>:30080/v1/chat/completions \
 
 It also serves a **built-in web UI** at `http://<pi-ip>:30080/`.
 
+### From your phone
+
+Install Tailscale on the phone (same tailnet) and just open the Pi's **MagicDNS
+name** — e.g. `http://rpi5:30080/` — no IP needed. The same base URL
+(`http://rpi5:30080/v1`) works for any OpenAI-compatible app (model
+`qwen2.5-1.5b`, any dummy API key).
+
 Any OpenAI-compatible client works (Open WebUI, Chatbox, opencode, the Python
 SDK…). Example opencode provider:
 
@@ -179,13 +188,30 @@ Highlights (full rationale in [`docs/DECISIONS.md`](docs/DECISIONS.md)):
 - **OOM / restarts** → lower `--ctx-size` or the memory limit in
   `raspberry/manifests/20-llama-server.yaml`.
 
-## Roadmap
+## What this demonstrates
 
-- [x] Two-node k3s cluster over Tailscale
-- [x] llama-server on the Raspberry Pi (OpenAI-compatible API)
-- [x] node-exporter + Prometheus + Grafana (node and LLM dashboards)
-- [ ] Alerts (Alertmanager) and a richer Grafana dashboard
-- [ ] CI to lint Ansible + manifests
+A DevOps / Platform / ML-Infrastructure project end to end:
+
+- **Infrastructure as Code** — one idempotent Ansible playbook (handlers, facts,
+  cross-play variables, `creates`, `changed_when`) provisions both machines.
+- **Kubernetes (k3s)** — Deployment, NodePort, PV/PVC, DaemonSet, probes,
+  ConfigMap/Secret, `nodeSelector` for a mixed-arch cluster, headless Service +
+  DNS service discovery.
+- **Networking** — Tailscale mesh with NAT traversal; k3s on the tailnet
+  (`node-ip` + `flannel-iface`) and `tls-san` so a control plane behind WSL NAT
+  can serve a remote worker.
+- **Observability** — Prometheus scrape design, PromQL, Grafana dashboards as
+  code, node + model metrics; dashboard and secret generated with `kubectl`.
+- **Edge / MLOps** — llama.cpp serving a quantized model on 4 GB, exposed as an
+  OpenAI-compatible API, with tokens/s and prompt-cache metrics.
+- **Linux systems** — systemd, cgroups, swap, passwordless sudo.
+
+## Possible next steps
+
+Not implemented — ideas only:
+
+- Alertmanager rules (CPU temperature, target down).
+- CI to lint the Ansible playbook and the manifests.
 
 ## License
 
