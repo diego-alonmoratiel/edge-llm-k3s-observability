@@ -10,6 +10,7 @@
 [![Prometheus](https://img.shields.io/badge/metrics-Prometheus-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io)
 [![Grafana](https://img.shields.io/badge/dashboards-Grafana-F46800?logo=grafana&logoColor=white)](https://grafana.com)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/diego-alonmoratiel/edge-llm-k3s-observability/actions/workflows/ci.yml/badge.svg)](https://github.com/diego-alonmoratiel/edge-llm-k3s-observability/actions/workflows/ci.yml)
 
 ## Overview
 

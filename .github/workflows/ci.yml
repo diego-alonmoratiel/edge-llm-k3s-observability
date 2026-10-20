@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ansible:
+    name: Ansible syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install ansible-core
+
+      - name: Syntax check playbooks
+        working-directory: ansible
+        run: |
+          ansible-playbook -i inventory.yml --syntax-check site.yml verify.yml teardown.yml
+
+  manifests:
+    name: Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+            | tar xz kubeconform
+
+      - name: Validate manifests
+        run: |
+          ./kubeconform -strict -summary \
+            raspberry/manifests/*.yaml \
+            pc/monitoring/*.yaml
+
+  dashboard:
+    name: Dashboard JSON
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate dashboard JSON
+        run: python3 -m json.tool pc/monitoring/dashboards/edge.json > /dev/null
+
+  safety:
+    name: No secrets committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail if secrets or private notes are tracked
+        run: |
+          status=0
+          for f in pc/monitoring/grafana-admin.env docs/ANNOTATED-FLOW.md; do
+            if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+              echo "::error::$f is tracked but must never be committed"
+              status=1
+            fi
+          done
+          exit "$status"
