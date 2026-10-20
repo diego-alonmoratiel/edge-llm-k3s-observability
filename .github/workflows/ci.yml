@@ -9,9 +9,9 @@ jobs:
     name: Ansible syntax check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -27,7 +27,7 @@ jobs:
     name: Kubernetes manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install kubeconform
         run: |
@@ -44,7 +44,7 @@ jobs:
     name: Dashboard JSON
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Validate dashboard JSON
         run: python3 -m json.tool pc/monitoring/dashboards/edge.json > /dev/null
@@ -53,7 +53,7 @@ jobs:
     name: No secrets committed
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Fail if secrets or private notes are tracked
         run: |
